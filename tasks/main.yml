@@ -34,6 +34,7 @@
     loop_var: chart
   tags:
     - charts
+  when: run_chart is not defined or ( run_chart == chart.name )
 
 - name: "Remove garbage"
   import_tasks: remove-garbage.yml
