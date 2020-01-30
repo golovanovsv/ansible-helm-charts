@@ -1,0 +1,59 @@
+- name: "Check helm_version configuration"
+  fail: 
+    msg: "Value of helm_version not in [2, 3]"
+  when: helm_version not in ["2", "3"]
+
+- name: "Finding kubectl"
+  shell: "command -v {{ kubectl_bin }}"
+  register: kubectl_result
+  changed_when: false
+  ignore_errors: true
+
+- fail:
+    msg: "kubectl not found"
+  when: kubectl_result.stdout == ""
+
+- name: "Register kubectl command"
+  set_fact:
+    kubectl_cmd: "{{ kubectl_result.stdout_lines[0] }}"
+
+- name: "Check kubectl bin params"
+  stat:
+    path: "{{ kubectl_cmd }}"
+  register: kubectl_stat
+
+- fail:
+    msg: "kubectl not executable" 
+  when: not ( ( kubectl_stat.stat.isreg or kubectl_stat.stat.islnk ) and kubectl_stat.stat.executable )
+
+- name: "Finding helm"
+  shell: "command -v {{ helm_bin }}"
+  register: helm_result
+  changed_when: false
+  ignore_errors: true
+
+- fail:
+    msg: "helm not found"
+  when: helm_result.stdout == ""
+
+- name: "Register helm command"
+  set_fact:
+    helm_cmd: "{{ helm_result.stdout_lines[0] }}"
+
+- name: "Check helm bin params"
+  stat:
+    path: "{{ helm_cmd }}"
+  register: helm_stat
+
+- fail:
+    msg: "helm not executable"
+  when: not ( ( helm_stat.stat.isreg or helm_stat.stat.islnk ) and helm_stat.stat.executable )
+
+- name: "Check helm version"
+  shell: "{{ helm_cmd }} version -c --short | grep -Po 'v\\d+\\.\\d+\\.\\d+' | grep -Po 'v\\d+'"
+  register: server_helm_version
+  changed_when: false
+
+- fail:
+    msg: "Version of helm client ({{ server_helm_version.stdout }}) does not match with helm_version ({{ helm_version }})"
+  when: server_helm_version.stdout != "v{{ helm_version }}"

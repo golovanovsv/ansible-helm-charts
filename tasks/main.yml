@@ -1,0 +1,42 @@
+- name: "Check environment"
+  import_tasks: environment.yml
+  tags:
+    - environment
+    - env
+
+- name: "Configuring kubernetes client"
+  import_tasks: k8s-client-config.yml
+  when: not k8s_static_config
+  tags:
+    - k8s
+
+- name: "Configuring helm repositories"
+  include_tasks: helm-repositories.yml
+  when: helm_repos is defined and helm_repos | length > 0
+  loop: "{{ helm_repos }}"
+  loop_control:
+    loop_var: repo
+  tags:
+    - repositories
+    - repo
+
+- name: "Update repositories"
+  command: "{{ helm_bin }} repo update"
+  tags:
+    - repositories
+    - repo
+  changed_when: false
+
+- name: "Install charts"
+  include_tasks: helm-charts.yml
+  loop: "{{ helm_charts | default([]) }}"
+  loop_control:
+    loop_var: chart
+  tags:
+    - charts
+
+- name: "Remove garbage"
+  import_tasks: remove-garbage.yml
+  tags:
+    - k8s
+    - charts

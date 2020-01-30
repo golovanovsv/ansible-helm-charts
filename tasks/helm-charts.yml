@@ -1,0 +1,146 @@
+- name: "Check chart \"{{ chart.name | default('unknown') }}\" parameters"
+  assert:
+    that:
+    - chart.name is defined
+    - chart.name | length > 0
+    - chart.state is defined
+    - chart.state in ['present', 'absent']
+
+- name: "Check \"{{ chart.name }}\" usage chart and git_repo | nothing"
+  fail:
+    msg: "You must set one of chart or git_repo fields"
+  when: chart.chart is not defined and chart.git_repo is not defined
+
+- name: "Check \"{{ chart.name }}\" usage chart and git_repo | both"
+  fail:
+    msg: "You must set only one of chart or git_repo fields. Not both"
+  when: chart.chart is defined and chart.git_repo is defined
+
+- name: "Register \"{{ chart.name }}\" vars"
+  set_fact:
+    chart_config: "/tmp/{{ chart.name }}/values.yaml"
+    chart_namespace: "{{ '--namespace {{ chart.namespace }}' if chart.namespace is defined else '' }}"
+    chart_version: "{{ '--version {{ chart.version }}' if chart.version is defined else '' }}"
+    chart_name: "{{ chart.name }}"
+    chart_path: "{{ '/tmp/{{ chart.name }}/chart' }}"
+    kube_config: "{{ k8s_config if k8s_static_config else k8s_config_tmp }}"
+    kube_context: "{{ '--kube-context {{ k8s_context }}' if k8s_static_config else '--kube-context k8s_context' }}"
+  changed_when: false
+
+- name: "Register \"{{ chart.name }}\" vars #2"
+  set_fact:
+    chart_chart: "{{ '{{ chart_path }}/{{ chart.git_path | default('') }}' if chart.git_repo is defined else '{{ chart.chart | default('') }}' }}"
+    # А тут нужно выбрать как мы будем вламываться в tiller:
+    # - на прямую через --host, если установлена переменная helm_tiller
+    # - через port-forward, если переменная helm_tiller не установлена
+    helm_entry: "{{ '--host {{ helm_tiller }}' if helm_tiller is defined else '{{ kube_context }}' }}"
+  changed_when: false
+
+- name: "Make \"{{ chart.name }}\" values file"
+  blockinfile:
+    path: "{{ chart_config }}"
+    create: yes
+    block: "{{ chart_values | to_nice_yaml(indent=2) }}"
+  vars:
+    chart_values: "{{ chart.params is defined | ternary(chart.params, {}) }}"
+  changed_when: false
+
+- name: "Download chart \"{{ chart.name }}\""
+  git:
+    repo: "{{ chart.git_repo }}"
+    dest: "{{ chart_path }}"
+  when: chart.state == 'present' and chart.git_repo is defined
+  changed_when: false
+
+- name: "Check namespace \"{{ chart.namespace }}\""
+  command: "{{ kubectl_bin }} get ns {{ chart.namespace }} -o jsonpath='{.metadata.name}' --ignore-not-found=true"
+  register: ns_result
+  changed_when: false
+
+- name: "Create namespace \"{{ chart.namespace }}\""
+  command: "{{ kubectl_bin }} create ns {{ chart.namespace }}"
+  when: ns_result.stdout != chart.namespace
+
+# Helm 3
+- name: "Dancing with helm {{ helm_version }}"
+  block:
+  - name: "Check chart \"{{ chart.name }}\""
+    command: >
+      {{ helm_cmd }}
+      list
+      --kubeconfig {{ kube_config }}
+      {{ kube_context }}
+      {{ chart_namespace}}
+      --filter '{{ chart_name }}'
+      -q -o json
+    register: chart_state
+    changed_when: false
+
+  - name: "Install chart \"{{ chart.name }}\""
+    command: >
+      {{ helm_cmd }}
+      upgrade --install
+      --kubeconfig {{ kube_config }}
+      {{ kube_context }}
+      {{ chart_namespace }}
+      -f {{ chart_config}}
+      {{ chart_name }}
+      {{ chart_chart }}
+    when: chart.state == 'present'
+    register: chart_result
+    changed_when: chart_result.rc == 0
+
+  - name: "Delete chart \"{{ chart.name }}\""
+    command: >
+      {{ helm_cmd }}
+      uninstall
+      --kubeconfig {{ kube_config}}
+      {{ kube_context }}
+      {{ chart_namespace }}
+      {{ chart_name }}
+    when: chart.state == 'absent' and chart_state.stdout == chart_name
+    register: chart_result
+    changed_when: chart_result.rc == 0
+  when: helm_version == "3"
+
+# Helm 2
+- name: "Dancing with helm {{ helm_version }}"
+  block:
+  - name: "Check chart state \"{{ chart.name }}\""
+    shell: >
+      KUBECONFIG={{ kube_config }} &&
+      {{ helm_cmd }}
+      ls -q
+      {{ kube_context }}
+      {{ chart_namespace }}
+    register: chart_state
+    changed_when: false
+
+  - name: "Install chart \"{{ chart.name }}\""
+    shell: >
+      KUBECONFIG={{ kube_config }} &&
+      {{ helm_cmd }}
+      upgrade --install
+      {{ helm_entry }}
+      {{ chart_namespace }}
+      -f {{ chart_config }}
+      {{ chart_name }}
+      {{ chart_chart }}
+    when: chart.state == 'present'
+    register: chart_result
+    changed_when: chart_result.rc == 0
+
+  - name: "Delete chart \"{{ chart.name }}\""
+    command: >
+      {{ helm_cmd }}
+      delete
+      {{ chart_name }}
+    environment:
+      KUBECONFIG: '{{ kube_config }}'
+    when: chart.state == 'absent' and chart_name in chart_state.stdout_lines
+  when: helm_version == "2"
+
+- name: "Remove chart \"{{ chart.name }}\" from file system"
+  file:
+    path: "/tmp/{{ chart.name }}"
+    state: absent

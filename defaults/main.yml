@@ -1,0 +1,53 @@
+# параметры клиента kybernetes
+k8s_static_config: false
+
+# Параметры при k8s_static_config = false
+# k8s_server: https://api.kubernetes.org:6443
+# k8s_ca: rsa_cert
+# k8s_client_cert: rsa_cert
+# k8s_client_key: rsa_key
+# k8s_username: kube-admin
+# k8s_password: kube-admin-password
+k8s_config_tmp: "/tmp/k8s_config"
+
+# Параметры при k8s_static_config = true
+#  k8s_config - путь к конфигурации
+#  k8s_context - контекст в котором будут выполняться операции
+k8s_config: "~/.kube/config"
+k8s_context: "default"
+
+# Параметры helm`а
+#  Helm 3 не совместим с kubernetes версии меньше, чем 1.9
+#  Используя helm 2 без параметра helm_tiller нужно помнить, что на клиенте и нодах kubernetes должен буть установлен socat,
+#   чтобы можно было использовать доступ к tiller через механизм port-forward
+# helm_version может быть 2 или 3
+helm_version: "3"
+# helm_tiller: "http://tiller.org:8324"
+
+# Список helm репозиториев
+helm_repos: []
+# - name: stable
+#   url: https://kubernetes-charts.storage.googleapis.com/
+#   state: present
+
+# Список helm-чартов для установки
+# chart и git_repo не должны задаваться одновременно, только по одному.
+# Все атрибуты params передаются в values helm-чарта
+helm_charts: []
+# - name: node-exporter
+#   chart: 
+#   git_repo: "git@bitbucket.org:smartube/helm-node-exporter.git"
+#   git_path: ""
+#   namespace: "prometheus"
+#   state: present
+#   params:
+#     image:
+#       tag: "v0.17.0"
+#     exporter:
+#       port: 19000
+
+# Вспомогательные параметры
+# Переопределяются если нужно использовать не стандартный исполнямеый файл
+#  Например: helm_3.0.2
+helm_bin: "helm"
+kubectl_bin: "kubectl"

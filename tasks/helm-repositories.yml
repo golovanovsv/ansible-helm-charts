@@ -1,0 +1,18 @@
+- name: "Check repository {{ repo.name | default('unknown') }} parameters"
+  assert:
+    that:
+      - repo.name is defined
+      - repo.name | length > 0
+      - repo.url is defined
+      - repo.url | urlsplit('netloc') != ''
+      - repo.url | urlsplit('scheme') != ''
+      - repo.state is defined 
+      - repo.state in ['present', 'absent']
+
+- name: "Add repository {{ repo.name }}"
+  command: "{{ helm_bin }} repo add {{ repo.name }} {{ repo.url}}"
+  when: repo.state == 'present'
+
+- name: "Remove repository {{ repo.name }}"
+  command: "{{ helm_bin }} repo remove {{ repo.name }}"
+  when: repo.state == 'absent'

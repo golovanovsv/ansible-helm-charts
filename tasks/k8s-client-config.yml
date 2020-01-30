@@ -1,0 +1,29 @@
+- name: "Check kubectl parameters | server url"
+  assert:
+    that:
+    - k8s_config_tmp is defined
+    - k8s_config_tmp | length > 0
+    - k8s_server is defined
+  when: not k8s_static_config
+
+- name: "Check kubectl parameters | certificates"
+  assert:
+    that:
+    - k8s_ca is defined
+    - k8s_client_cert is defined
+    - k8s_client_key is defined
+  when: not k8s_static_config and k8s_username is not defined
+
+- name: "Check kubectl parameters | password"
+  assert:
+    that:
+    - k8s_password is defined
+  when: not k8s_static_config and k8s_username is defined
+
+
+- name: "Create kubectl config"
+  template:
+    src: "config.j2"
+    dest: "{{ k8s_config_tmp }}"
+    mode: "0600"
+  changed_when: false
