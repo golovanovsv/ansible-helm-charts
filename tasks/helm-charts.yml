@@ -108,17 +108,17 @@
   block:
   - name: "Check chart state \"{{ chart.name }}\""
     shell: >
-      KUBECONFIG={{ kube_config }} &&
+      KUBECONFIG={{ kube_config }}
       {{ helm_cmd }}
       ls -q
-      {{ kube_context }}
+      {{ helm_entry }}
       {{ chart_namespace }}
     register: chart_state
     changed_when: false
 
   - name: "Install chart \"{{ chart.name }}\""
     shell: >
-      KUBECONFIG={{ kube_config }} &&
+      KUBECONFIG={{ kube_config }}
       {{ helm_cmd }}
       upgrade --install
       {{ helm_entry }}
