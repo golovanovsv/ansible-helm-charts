@@ -24,6 +24,7 @@
     chart_name: "{{ chart.name }}"
     chart_path: "{{ '/tmp/{{ chart.name }}/chart' }}"
     kube_config: "{{ k8s_config if k8s_static_config else k8s_config_tmp }}"
+    kube_plain_context: "{{ k8s_context if k8s_static_config else 'k8s_context' }}"
     kube_context: "{{ '--kube-context {{ k8s_context }}' if k8s_static_config else '--kube-context k8s_context' }}"
   changed_when: false
 
@@ -44,6 +45,7 @@
   vars:
     chart_values: "{{ chart.params is defined | ternary(chart.params, {}) }}"
   changed_when: false
+  when: chart.state == 'present'
 
 - name: "Download chart \"{{ chart.name }}\""
   git:
@@ -53,12 +55,12 @@
   changed_when: false
 
 - name: "Check namespace \"{{ chart.namespace }}\""
-  command: "{{ kubectl_bin }} get ns {{ chart.namespace }} -o jsonpath='{.metadata.name}' --ignore-not-found=true"
+  command: "{{ kubectl_bin }} --kubeconfig {{ kube_config }} --context {{ kube_plain_context }} get ns {{ chart.namespace }} -o jsonpath='{.metadata.name}' --ignore-not-found=true"
   register: ns_result
   changed_when: false
 
 - name: "Create namespace \"{{ chart.namespace }}\""
-  command: "{{ kubectl_bin }} create ns {{ chart.namespace }}"
+  command: "{{ kubectl_bin }} --kubeconfig {{ kube_config }} --context {{ kube_plain_context }} create ns {{ chart.namespace }}"
   when: ns_result.stdout != chart.namespace
 
 # Helm 3
